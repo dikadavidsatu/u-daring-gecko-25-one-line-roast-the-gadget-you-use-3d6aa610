@@ -76,6 +76,38 @@ const ROAST: string = ROAST_CLAUSES.join(" ");
 // line the judge would score against on its very first criterion.
 const GADGET_NAME = "robot vacuum";
 
+// The concrete detail that makes the roast one person's gripe instead of
+// a generic complaint: the weekday the charger gets eaten. Criterion 5
+// rewards a specific, observable behaviour, and a named weekday is the
+// smallest detail that proves the line is grounded in a real habit
+// rather than an invented one. The check below is case-insensitive, so
+// "Tuesday" at the start of a sentence would pass too.
+const CONCRETE_DETAIL = "tuesday";
+
+// Every weekday, so the concrete-detail check can tell the difference
+// between "mentions a specific day" and "mentions the exact one this
+// line was written around". Only CONCRETE_DETAIL is required; the rest
+// of the list is here so a future rewrite that swaps the weekday (say,
+// to "Friday") fails loudly instead of silently passing a line whose
+// punchline no longer matches its own detail.
+const WEEKDAYS: readonly string[] = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+];
+
+// Does the line name a weekday at all? A roast with no day in it can
+// still be funny, but it loses the "this happens on a schedule"
+// specificity that this entry's punchline depends on.
+function mentionsWeekday(line: string): boolean {
+  const lower = line.toLowerCase();
+  return WEEKDAYS.some((day) => lower.includes(day));
+}
+
 // ---------------------------------------------------------------------------
 // The gate — the competition's own limits, as constants
 // ---------------------------------------------------------------------------
@@ -188,6 +220,23 @@ function checkRoast(line: string): GateFailure[] {
     });
   }
 
+  // The concrete-detail check: the punchline only works because the
+  // charger gets eaten on a specific day, every week. A line that
+  // mentions no weekday has lost the habit that makes it specific,
+  // and a line that mentions a different weekday has drifted from the
+  // detail this entry was written around.
+  if (!mentionsWeekday(line)) {
+    failures.push({
+      rule: "concrete-detail",
+      detail: "entry must name a weekday — the recurring habit is the joke",
+    });
+  } else if (!line.toLowerCase().includes(CONCRETE_DETAIL)) {
+    failures.push({
+      rule: "concrete-detail",
+      detail: `entry names a weekday but not the one it was written around (${CONCRETE_DETAIL})`,
+    });
+  }
+
   return failures;
 }
 
@@ -219,6 +268,20 @@ function outputDirectory(): string {
   return "/output";
 }
 
+// One line of human-readable confirmation for a local run: file,
+// size in both counting units the gate cares about, destination, and
+// the entry itself. Kept as its own helper so main() stays about
+// validate-then-write, and so the wording of the confirmation can be
+// tested or changed without touching the write path.
+function formatWriteSummary(line: string, destination: string): string {
+  const chars = countCodePoints(line);
+  const bytes = countUtf8Bytes(line);
+  return (
+    `wrote ${ENTRY_FILENAME} (${chars} chars, ${bytes} bytes) ` +
+    `to ${destination}: ${line}`
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -238,10 +301,7 @@ function main(): void {
   // grader reads the file, never this log — but when you run the
   // program by hand, seeing the character count here is how you know
   // at a glance that the gate passed.
-  console.log(
-    `wrote ${ENTRY_FILENAME} (${countCodePoints(ROAST)} chars, ` +
-      `${countUtf8Bytes(ROAST)} bytes) to ${destination}: ${ROAST}`,
-  );
+  console.log(formatWriteSummary(ROAST, destination));
 }
 
 main();
